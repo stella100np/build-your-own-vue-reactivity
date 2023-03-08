@@ -1,0 +1,183 @@
+# build your own @vue/reactivity
+
+TODO: introudction
+<CH.Scrollycoding>
+
+## 响应式数据与副作用函数
+当 effect 函数执行时，它会设置 body 的文本内容，但除了 effect 函数之外的任何函数都可以读取或设置 body 的文本内容。也就是说，effect 函数的执行会直接或间接影响其他函数的执行，这时我们说 effect 函数产生了副作用。副作用很容易产生，例如一个函数修改了全局变量，这其实也是一个副作用，如下面的代码所示：
+副作用函数指的是会产生副作用的函数，如下面的代码所示：
+
+
+```js app.js focus=1:5
+const obj = { text: 'hello world' }
+function effect() {
+  // effect 函数的执行会读取 obj.text
+  document.body.innerText = obj.text
+}
+```
+```python hello.py mark=1[22:30]
+print("Rendered with Code Hike")
+```
+
+---
+
+## Step 2
+TODO
+
+```js app.js
+// 存储副作用函数的桶
+const bucket = new Set()
+
+// 原始数据
+const data = { text: 'hello world' }
+// 对原始数据的代理
+const obj = new Proxy(data, {
+  // 拦截读取操作
+  get(target, key) {
+    // 将副作用函数 effect 添加到存储副作用函数的桶中
+    bucket.add(effect)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 把副作用函数从桶里取出并执行
+    bucket.forEach(fn => fn())
+    // 返回 true 代表设置操作成功
+    return true
+  }
+})
+
+```
+
+---
+
+## Step 3
+TODO
+
+
+
+```js app.js focus=25:35
+// 存储副作用函数的桶
+const bucket = new Set()
+
+// 原始数据
+const data = { text: 'hello world' }
+// 对原始数据的代理
+const obj = new Proxy(data, {
+  // 拦截读取操作
+  get(target, key) {
+    // 将副作用函数 effect 添加到存储副作用函数的桶中
+    bucket.add(effect)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 把副作用函数从桶里取出并执行
+    bucket.forEach(fn => fn())
+    // 返回 true 代表设置操作成功
+    return true
+  }
+})
+
+// 副作用函数
+function effect() {
+  document.body.innerText = obj.text
+}
+// 执行副作用函数，触发读取
+effect()
+// 1 秒后修改响应式数据
+setTimeout(() => {
+  obj.text = 'hello vue3'
+}, 1000)
+
+```
+
+---
+
+## Step 4
+
+TODO
+
+```js app.js focus=1:9
+// 用一个全局变量存储被注册的副作用函数
+let activeEffect
+// effect 函数用于注册副作用函数
+function effect(fn) {
+  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+  activeEffect = fn
+  // 执行副作用函数
+  fn()
+}
+
+// 存储副作用函数的桶
+const bucket = new Set()
+// 原始数据
+const data = { text: 'hello world' }
+// 对原始数据的代理
+const obj = new Proxy(data, {
+  // 拦截读取操作
+  get(target, key) {
+    // 将副作用函数 effect 添加到存储副作用函数的桶中
+    bucket.add(effect)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 把副作用函数从桶里取出并执行
+    bucket.forEach(fn => fn())
+    // 返回 true 代表设置操作成功
+    return true
+  }
+})
+
+```
+
+---
+
+## Step 5
+
+TODO
+
+
+```js app.js
+// 用一个全局变量存储被注册的副作用函数
+let activeEffect
+// effect 函数用于注册副作用函数
+function effect(fn) {
+  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+  activeEffect = fn
+  // 执行副作用函数
+  fn()
+}
+
+// 存储副作用函数的桶
+const bucket = new Set()
+// 原始数据
+const data = { text: 'hello world' }
+const obj = new Proxy(data, {
+  get(target, key) {
+    // 将 activeEffect 中存储的副作用函数收集到“桶”中
+    if (activeEffect) {  // 新增
+      bucket.add(activeEffect)  // 新增
+    }  // 新增
+    return target[key]
+  },
+  set(target, key, newVal) {
+    target[key] = newVal
+    bucket.forEach(fn => fn())
+    return true
+  }
+})
+```
+
+</CH.Scrollycoding>
+
