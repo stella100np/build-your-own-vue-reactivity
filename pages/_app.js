@@ -1,10 +1,12 @@
 import "@code-hike/mdx/styles"
 import "../styles/custom-ch.css";
+import "../styles/globals.css"
+
 
 function MyApp({ Component, pageProps }) {
   return (
     <article
-      style={{ maxWidth: 1536, margin: "0 auto", }}
+      className="prose md:prose-lg lg:prose-xl  prose-slate max-w-7xl  mx-auto"
     >
       <Component {...pageProps} />
     </article>

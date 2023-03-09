@@ -1,110 +1,171 @@
 # build your own @vue/reactivity
 
-TODO: introudction
-<CH.Scrollycoding>
+VUE 的响应式实现来源于十分朴素的需求。例如当`text`变化时，也希望`document.body.innerText`里的内容也随之变化。
+```js mark=3
+let text = "Hello world" 
+document.body.innerText = text
+text = "Hi world"
+```
 
+再比如，当下面的`a`或者`b`变化时，希望`x`也随之变化
+```js mark=4
+let a = 1;
+let b = 1;
+let x = a + b;
+a = 2
+```
+现在，JavaScript还无法像刚才设想的那样进行执行。我们不妨换个思路，将刚才提到的“随之变化”都视作一个变量变化后的**副作用**。上面的例子中**副作用**的代码都比较简单，只有一行，而**副作用**的代码也可以是多行的，比如
+```js mark=3:4
+let a = 1;
+let b = 1;
+let x = a + b;
+console.log(x)
+a = 2
+``` 
+要在一个变量变化时，同时执行多行**副作用**代码，就需要将这些代码放入一个“容器”当中，而Javascript中的**函数**为我们提供这样的能力！
+```js mark=2:4
+const obj = { x: 1, y: 1 }
+function effect() {
+  let sum = obj.x + obj.y
+  console.log(sum)
+}
+obj.x = 2
+```
+进而，我们可以把这个包裹着副作用代码段的函数叫做**副作用函数**。
 ## 响应式数据与副作用函数
-当 effect 函数执行时，它会设置 body 的文本内容，但除了 effect 函数之外的任何函数都可以读取或设置 body 的文本内容。也就是说，effect 函数的执行会直接或间接影响其他函数的执行，这时我们说 effect 函数产生了副作用。副作用很容易产生，例如一个函数修改了全局变量，这其实也是一个副作用，如下面的代码所示：
-副作用函数指的是会产生副作用的函数，如下面的代码所示：
 
-
-```js app.js focus=1:5
-const obj = { text: 'hello world' }
+<CH.Scrollycoding>
+### 响应式数据定义
+我们最初的需求是当`obj`变量变化时，自动重新执行`effect`函数。如果`obj`变量能做这点，就称它为**响应式变量**。
+```js index.js  
+const obj = { x: 1, y: 1 }
 function effect() {
-  // effect 函数的执行会读取 obj.text
-  document.body.innerText = obj.text
+  let sum = obj.x + obj.y
+  console.log(sum)
 }
-```
-```python hello.py mark=1[22:30]
-print("Rendered with Code Hike")
-```
-
----
-
-## Step 2
-TODO
-
-```js app.js
-// 存储副作用函数的桶
-const bucket = new Set()
-
-// 原始数据
-const data = { text: 'hello world' }
-// 对原始数据的代理
-const obj = new Proxy(data, {
-  // 拦截读取操作
-  get(target, key) {
-    // 将副作用函数 effect 添加到存储副作用函数的桶中
-    bucket.add(effect)
-    // 返回属性值
-    return target[key]
-  },
-  // 拦截设置操作
-  set(target, key, newVal) {
-    // 设置属性值
-    target[key] = newVal
-    // 把副作用函数从桶里取出并执行
-    bucket.forEach(fn => fn())
-    // 返回 true 代表设置操作成功
-    return true
-  }
-})
-
-```
-
----
-
-## Step 3
-TODO
-
-
-
-```js app.js focus=25:35
-// 存储副作用函数的桶
-const bucket = new Set()
-
-// 原始数据
-const data = { text: 'hello world' }
-// 对原始数据的代理
-const obj = new Proxy(data, {
-  // 拦截读取操作
-  get(target, key) {
-    // 将副作用函数 effect 添加到存储副作用函数的桶中
-    bucket.add(effect)
-    // 返回属性值
-    return target[key]
-  },
-  // 拦截设置操作
-  set(target, key, newVal) {
-    // 设置属性值
-    target[key] = newVal
-    // 把副作用函数从桶里取出并执行
-    bucket.forEach(fn => fn())
-    // 返回 true 代表设置操作成功
-    return true
-  }
-})
-
-// 副作用函数
-function effect() {
-  document.body.innerText = obj.text
-}
-// 执行副作用函数，触发读取
 effect()
-// 1 秒后修改响应式数据
+obj.x = 2
+```
+
+---
+
+### 响应式数据的实现思路
+仔细观察例子，在`effect`中我们读取了`obj`的属性，又在最后设置了`obj`的属性。换句话说，
+- 当副作用函数 effect 执行时，会触发字段 obj.x 的读取操作；
+- 当修改 obj.x 的值时，会触发字段 obj.x 的设置操作。
+
+通过拦截`obj`对象的读取和设置操作，在读取时，把`effect`存到某个地方去，并在设置时，从那个地方取回`effect`并执行，我们就能将`obj`变成响应式数据。
+```js index.js  focus=3[12:25],7
+const obj = { x: 1, y: 1 }
+function effect() {
+  let sum = obj.x + obj.y
+  console.log(sum)
+}
+effect()
+obj.x = 2
+```
+
+---
+
+### 响应式数据的基本实现1
+如何拦截一个对象的读取和设置操作呢？可以采用ES6中[`Proxy`](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Proxy)来实现。
+通过它的`get`与`set`就能实现对原始数据的代理，在[get](focus://index.js#8[3:5])与[set](focus://index.js#15[3:5])函数中，我们可以对`effect`进行额外的操作。
+
+另一个问题，应当将`effect`存到什么样的数据结构中去呢？[Set](focus://index.js#1[20:22])是个不错的选择，读取方便，并且当我们有多个`effect`时，它能自动去重。在例子`effect`中我们既读取了`x`又读取了`y`，如果不去重，`effect`会被添加两次也会被执行两次，这是没有必要的。
+> 注意：现在我们在`effect`中读取是代理之后的`data`，设置时也是设置的`data`的属性，而不是原始数据`obj`的！
+
+注意到[effect函数名是硬编码在get](focus://index.js#8:10)中的，它可以完全不叫这个名字，下一节我们解决这个问题。
+```js index.js 
+const bucket = new Set()
+
+// 原始数据
+const obj = { x: 1, y: 1 }
+// 对原始数据的代理
+const data = new Proxy(obj, {
+  // 拦截读取操作
+  get(target, key) {
+    // 将副作用函数 effect 添加到存储副作用函数的桶中
+    bucket.add(effect)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 把副作用函数从桶里取出并执行
+    bucket.forEach(fn => fn())
+    // 返回 true 代表设置操作成功
+    return true
+  }
+})
+function effect() {
+  let sum = data.x + data.y
+  console.log(sum)
+}
+effect()
 setTimeout(() => {
-  obj.text = 'hello vue3'
+  data.x = 2
+}, 1000)
+```
+
+---
+
+### 响应式数据的实现
+用一个全局变量`activeEffect`存储被注册的副作用函数，`effect`转变为接受一个副作用函数`fn`为参数，并注册执行副作用函数的高级函数。
+另外，我们还需要修改get函数的内容，将全局变量`activeEffect`放入`Set`中，而不是之前`effect`函数。
+
+```js index.js focus=1:9,20:21,35:38
+// 用一个全局变量存储被注册的副作用函数
+let activeEffect
+// effect 函数用于注册副作用函数
+function effect(fn) {
+  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+  activeEffect = fn
+  // 执行副作用函数
+  fn()
+}
+
+// 存储副作用函数的桶
+const bucket = new Set()
+
+// 原始数据
+const obj = { x: 1, y: 1 }
+// 对原始数据的代理
+const data = new Proxy(obj, {
+  // 拦截读取操作
+  get(target, key) {
+    // 将副作用函数 activeEffect 添加到存储副作用函数的桶中
+    bucket.add(activeEffect)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 把副作用函数从桶里取出并执行
+    bucket.forEach(fn => fn())
+    // 返回 true 代表设置操作成功
+    return true
+  }
+})
+effect(function() {
+  let sum = data.x + data.y
+  console.log(sum)
+})
+setTimeout(() => {
+  data.x = 2
 }, 1000)
 
 ```
 
 ---
 
-## Step 4
-
-TODO
-
-```js app.js focus=1:9
+如果我们为响应式变量`data`设置一个原本不存在的属性，比如在setTimeout中设置`data.z = 2`，会怎么样呢？
+因为用effect函数注册副作用函数会立即执行该函数，所以第一行会输出`sum: 2`，当我们设置`data.z = 2`时，
+因为`z`属性没有在副作用函数注册时被拦截，应该不会再次执行副作用函数，但实际输出如下，副作用函数还是被执行了
+```js index.js focus=40
 // 用一个全局变量存储被注册的副作用函数
 let activeEffect
 // effect 函数用于注册副作用函数
@@ -117,14 +178,15 @@ function effect(fn) {
 
 // 存储副作用函数的桶
 const bucket = new Set()
+
 // 原始数据
-const data = { text: 'hello world' }
+const obj = { x: 1, y: 1 }
 // 对原始数据的代理
-const obj = new Proxy(data, {
+const data = new Proxy(obj, {
   // 拦截读取操作
   get(target, key) {
-    // 将副作用函数 effect 添加到存储副作用函数的桶中
-    bucket.add(effect)
+    // 将副作用函数 activeEffect 添加到存储副作用函数的桶中
+    bucket.add(activeEffect)
     // 返回属性值
     return target[key]
   },
@@ -138,46 +200,19 @@ const obj = new Proxy(data, {
     return true
   }
 })
-
-```
-
----
-
-## Step 5
-
-TODO
-
-
-```js app.js
-// 用一个全局变量存储被注册的副作用函数
-let activeEffect
-// effect 函数用于注册副作用函数
-function effect(fn) {
-  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
-  activeEffect = fn
-  // 执行副作用函数
-  fn()
-}
-
-// 存储副作用函数的桶
-const bucket = new Set()
-// 原始数据
-const data = { text: 'hello world' }
-const obj = new Proxy(data, {
-  get(target, key) {
-    // 将 activeEffect 中存储的副作用函数收集到“桶”中
-    if (activeEffect) {  // 新增
-      bucket.add(activeEffect)  // 新增
-    }  // 新增
-    return target[key]
-  },
-  set(target, key, newVal) {
-    target[key] = newVal
-    bucket.forEach(fn => fn())
-    return true
-  }
+effect(function() {
+  let sum = data.x + data.y
+  console.log("sum: ")
 })
+setTimeout(() => {
+  data.z = 2
+}, 1000)
 ```
 
+```sh mark=2
+sum: 2
+sum: 2
+```
+为什么会这样呢？因为在data设置`z`属性时，触发了[set拦截函数](focus://index.js#26:33)，在函数中将`bucket`中每个函数都依次执行了一次，无论这个函数是否与新属性`z`有关。
 </CH.Scrollycoding>
 

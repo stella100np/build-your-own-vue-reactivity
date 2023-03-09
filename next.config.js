@@ -4,7 +4,7 @@ const theme = require("shiki/themes/material-palenight.json")
 const withMDX = require("@next/mdx")({
   extension: /\.mdx?$/,
   options: {
-    remarkPlugins: [[remarkCodeHike, { theme }]],
+    remarkPlugins: [[remarkCodeHike, { theme, "lineNumbers": true, }]],
   },
 })
 
