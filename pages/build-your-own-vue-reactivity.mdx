@@ -37,6 +37,7 @@ obj.x = 2
 <CH.Scrollycoding>
 ### 响应式数据定义
 我们最初的需求是当`obj`变量变化时，自动重新执行`effect`函数。如果`obj`变量能做这点，就称它为**响应式变量**。
+
 ```js index.js  
 const obj = { x: 1, y: 1 }
 function effect() {
@@ -115,7 +116,7 @@ setTimeout(() => {
 用一个全局变量`activeEffect`存储被注册的副作用函数，`effect`转变为接受一个副作用函数`fn`为参数，并注册执行副作用函数的高级函数。
 另外，我们还需要修改get函数的内容，将全局变量`activeEffect`放入`Set`中，而不是之前`effect`函数。
 
-```js index.js focus=1:9,20:21,35:38
+```js index.js focus=1:9,19:20,34:37
 // 用一个全局变量存储被注册的副作用函数
 let activeEffect
 // effect 函数用于注册副作用函数
@@ -126,7 +127,6 @@ function effect(fn) {
   fn()
 }
 
-// 存储副作用函数的桶
 const bucket = new Set()
 
 // 原始数据
@@ -162,10 +162,11 @@ setTimeout(() => {
 
 ---
 
+#### 现有副作用函数存储数据结构的缺陷
 如果我们为响应式变量`data`设置一个原本不存在的属性，比如在setTimeout中设置`data.z = 2`，会怎么样呢？
 因为用effect函数注册副作用函数会立即执行该函数，所以第一行会输出`sum: 2`，当我们设置`data.z = 2`时，
 因为`z`属性没有在副作用函数注册时被拦截，应该不会再次执行副作用函数，但实际输出如下，副作用函数还是被执行了
-```js index.js focus=40
+```js index.js focus=39 mark=11
 // 用一个全局变量存储被注册的副作用函数
 let activeEffect
 // effect 函数用于注册副作用函数
@@ -176,7 +177,6 @@ function effect(fn) {
   fn()
 }
 
-// 存储副作用函数的桶
 const bucket = new Set()
 
 // 原始数据
@@ -214,5 +214,156 @@ sum: 2
 sum: 2
 ```
 为什么会这样呢？因为在data设置`z`属性时，触发了[set拦截函数](focus://index.js#26:33)，在函数中将`bucket`中每个函数都依次执行了一次，无论这个函数是否与新属性`z`有关。
+
+---
+
+#### 新的副作用函数存储数据结构
+之所以会有上一节的问题，是因为我们没有在每一个属性值与副作用函数之间添加联系。最能体现建立联系这个功能的数据结构是**映射**，在Javascript中我们可以使用`Map`来完成某个对象的某些属性与副作用函数集合的映射。
+更进一步的，我们可能需要为多个对象的多个属性添加与多个副作用函数的联系。那么我们可以使用下面的数据结构。
+
+TODO: 图片
+
+```js index.js mark=12,17:52
+// 用一个全局变量存储被注册的副作用函数
+let activeEffect
+// effect 函数用于注册副作用函数
+function effect(fn) {
+  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+  activeEffect = fn
+  // 执行副作用函数
+  fn()
+}
+
+// 新的存储副作用函数的数据结构
+const bucket = new WeakMap();
+
+// 原始数据
+const obj = { x: 1, y: 1 }
+// 对原始数据的代理
+const data = new Proxy(obj, {
+  // 拦截读取操作
+  get(target, key) {
+    // 没有 activeEffect，直接 return
+    if (!activeEffect) return target[key]
+    // 根据 target 从“桶”中取得 depsMap，它也是一个 Map 类型：key --> effects
+    let depsMap = bucket.get(target)
+    // 如果不存在 depsMap，那么新建一个 Map 并与 target 关联
+    if (!depsMap) {
+      bucket.set(target, (depsMap = new Map()))
+    }
+    // 再根据 key 从 depsMap 中取得 deps，它是一个 Set 类型，
+    // 里面存储着所有与当前 key 相关联的副作用函数：effects
+    let deps = depsMap.get(key)
+    // 如果 deps 不存在，同样新建一个 Set 并与 key 关联
+    if (!deps) {
+      depsMap.set(key, (deps = new Set()))
+    }
+    // 最后将当前激活的副作用函数添加到“桶”里
+    deps.add(activeEffect)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 根据 target 从桶中取得 depsMap，它是 key --> effects
+    const depsMap = bucket.get(target)
+    if (!depsMap) return
+    // 根据 key 取得所有副作用函数 effects
+    const effects = depsMap.get(key)
+    // 执行副作用函数
+    effects && effects.forEach(fn => fn())
+  }
+})
+
+effect(function () {
+  let sum = data.x + data.y
+  console.log("sum:", sum)
+})
+
+setTimeout(() => {
+  data.z = 2
+}, 1000)
+```
+现在输出结果正常了：
+```sh
+sum: 2
+```
+
+---
+进一步，可以将拦截函数的逻辑从Proxy中抽离出来，分别把逻辑封装到 [track](focus://track.js#1:14) 和 [trigger](focus://trigger.js#1:7) 函数内，这能为我们带来极大的灵活性。
+<CH.Code>
+```js index.js mark=21,30
+// 用一个全局变量存储被注册的副作用函数
+let activeEffect
+// effect 函数用于注册副作用函数
+function effect(fn) {
+  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+  activeEffect = fn
+  // 执行副作用函数
+  fn()
+}
+
+// 新的存储副作用函数的数据结构
+const bucket = new WeakMap();
+
+// 原始数据
+const obj = { x: 1, y: 1 }
+// 对原始数据的代理
+const data = new Proxy(obj, {
+  // 拦截读取操作
+  get(target, key) {
+    // 将副作用函数 activeEffect 添加到存储副作用函数的桶中
+    track(target, key)
+    // 返回属性值
+    return target[key]
+  },
+  // 拦截设置操作
+  set(target, key, newVal) {
+    // 设置属性值
+    target[key] = newVal
+    // 把副作用函数从桶里取出并执行
+    trigger(target, key)
+  }
+})
+
+effect(function () {
+  let sum = data.x + data.y
+  console.log("sum:", sum)
+})
+setTimeout(() => {
+  data.z = 2
+}, 1000)
+```
+```js track.js
+// 在 get 拦截函数内调用 track 函数追踪变化
+function track(target, key) {
+  // 没有 activeEffect，直接 return
+  if (!activeEffect) return
+  let depsMap = bucket.get(target)
+  if (!depsMap) {
+    bucket.set(target, (depsMap = new Map()))
+  }
+  let deps = depsMap.get(key)
+  if (!deps) {
+    depsMap.set(key, (deps = new Set()))
+  }
+  deps.add(activeEffect)
+}
+```
+```js trigger.js
+// 在 set 拦截函数内调用 trigger 函数触发变化
+function trigger(target, key) {
+  const depsMap = bucket.get(target)
+  if (!depsMap) return
+  const effects = depsMap.get(key)
+  effects && effects.forEach(fn => fn())
+}
+```
+
+</CH.Code>
+
+
 </CH.Scrollycoding>
 
