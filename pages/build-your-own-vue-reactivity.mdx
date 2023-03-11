@@ -1,3 +1,5 @@
+import { Tip,Note } from "/utils/caution.jsx";
+
 # build your own @vue/reactivity
 
 VUE 的响应式实现来源于十分朴素的需求。例如当`text`变化时，也希望`document.body.innerText`里的内容也随之变化。
@@ -73,9 +75,11 @@ obj.x = 2
 通过它的`get`与`set`就能实现对原始数据的代理，在[get](focus://index.js#8[3:5])与[set](focus://index.js#15[3:5])函数中，我们可以对`effect`进行额外的操作。
 
 另一个问题，应当将`effect`存到什么样的数据结构中去呢？[Set](focus://index.js#1[20:22])是个不错的选择，读取方便，并且当我们有多个`effect`时，它能自动去重。在例子`effect`中我们既读取了`x`又读取了`y`，如果不去重，`effect`会被添加两次也会被执行两次，这是没有必要的。
-> 注意：现在我们在`effect`中读取是代理之后的`data`，设置时也是设置的`data`的属性，而不是原始数据`obj`的！
-
 注意到[effect函数名是硬编码在get](focus://index.js#8:10)中的，它可以完全不叫这个名字，下一节我们解决这个问题。
+
+<Note>
+现在我们在`effect`中读取是代理之后的`data`，设置时也是设置的`data`的属性，而不是原始数据`obj`的！
+</Note>
 ```js index.js 
 const bucket = new Set()
 
