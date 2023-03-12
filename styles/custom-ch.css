@@ -2,6 +2,15 @@ body {
   --ch-scrollycoding-sticker-width: 600px;
   --ch-scrollycoding-code-min-height: 62vh;
 }
-.ch-scrollycoding-step-content[data-selected]{
+
+.ch-scrollycoding-step-content[data-selected] {
   border-color: #4f46e5;
+}
+
+.ch-scrollycoding-step-content {
+  min-height: 90px;
+}
+
+.not-mx p {
+  margin: 0;
 }

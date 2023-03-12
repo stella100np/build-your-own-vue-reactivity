@@ -21,9 +21,9 @@ export const Alert = ({ type, children }) => {
 
 export const Tip = ({ children }) => {
   return (
-    <div className="not-prose bg-indigo-100 rounded-md p-4 mb-4 ">
+    <div className="not-mx bg-indigo-100 rounded-md p-4 mb-4 ">
       <div className="flex">
-        <InformationCircleIcon className="w-6 h-6 mr-4 text-indigo-500" />
+        <InformationCircleIcon className="flex-none w-6 h-6 mr-4 text-indigo-500" />
         <div className='text-base text-indigo-600 font-mono font-medium'>
           {children}
         </div>
@@ -34,7 +34,7 @@ export const Tip = ({ children }) => {
 
 export const Note = ({ children }) => {
   return (
-    <div className="not-prose  bg-slate-100  rounded-md p-4 mb-4 ">
+    <div className="not-mx bg-slate-100  rounded-md p-4 mb-4 ">
       <div className="flex">
         <ExclamationCircleIcon className="w-6 h-6 mr-4 text-slate-500" />
         <div className='text-base text-slate-600 font-mono font-medium'>
