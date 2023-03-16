@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://build-u-own-vue-reactivity.netlify.app
+
+# Sitemaps
+Sitemap: https://build-u-own-vue-reactivity.netlify.app/sitemap.xml
