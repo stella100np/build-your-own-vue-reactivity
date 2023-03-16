@@ -374,7 +374,54 @@ function trigger(target, key) {
 ---
 
 ### 分支切换
-placeholder
+如果我们稍稍改造一下副作用函数中的[语句](focus://index.js#28)，它变成了一个三元运算符。
+当字段`data.isPositive`的值发生变化时，代码执行的分支会跟着变化，这就是所谓的分支切换。
+- 当`data.isPositive`为真(true)，执行的是读取`data.x`的操作
+- 当`data.isPositive`为假(false)，执行的是读取`-1`的操作
+```js index.js mark=15,27:35
+// 用一个全局变量存储被注册的副作用函数
+let activeEffect
+// effect 函数用于注册副作用函数
+function effect(fn) {
+  // 当调用 effect 注册副作用函数时，将副作用函数 fn 赋值给 activeEffect
+  activeEffect = fn
+  // 执行副作用函数
+  fn()
+}
+
+// 存储副作用函数的桶
+const bucket = new WeakMap();
+
+// 原始数据
+const obj = { isPositive: true, x: 1, y: -1 }
+// 对原始数据的代理
+const data = new Proxy(obj, {
+  get(target, key) {
+    track(target, key)
+    return target[key]
+  },
+  set(target, key, newVal) {
+    target[key] = newVal
+    trigger(target, key)
+  }
+})
+effect(function () {
+  let result = data.isPositive ? data.x : -1
+  console.log("result:", result)
+})
+
+//更改data的属性值
+data.isPositive = false
+data.x = 2
+data.x = 3
+```
+
+```sh 
+result: 1
+result: -1
+result: -1
+result: -1
+```
 
 后两次`data.x`发生变化后依旧触发了副作用函数的执行。可是`data.isPositive`为变`false`后，就切换到了另一个分支上执行，而无论`data.x`怎么变化，输出结果始终是`-1`。
 换言之，现在`data.x`的变化，与输出结果之间是完全无关的，它所引发的副作用函数的重新执行是没有必要的、无意义的。
